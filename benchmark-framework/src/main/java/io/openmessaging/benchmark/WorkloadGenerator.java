@@ -38,6 +38,7 @@ import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 import org.apache.commons.lang.ArrayUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -72,8 +73,13 @@ public class WorkloadGenerator implements AutoCloseable {
         List<String> topics =
                 worker.createTopics(new TopicsInfo(workload.topics, workload.partitionsPerTopic));
         log.info("Created {} topics in {} ms", topics.size(), timer.elapsedMillis());
+        List<String> consumerTopics = topics;
+        if (workload.sourceAlias != null) {
+            consumerTopics =
+                    topics.stream().map(t -> workload.sourceAlias + t).collect(Collectors.toList());
+        }
 
-        createConsumers(topics);
+        createConsumers(consumerTopics);
         createProducers(topics);
 
         ensureTopicsAreReady();

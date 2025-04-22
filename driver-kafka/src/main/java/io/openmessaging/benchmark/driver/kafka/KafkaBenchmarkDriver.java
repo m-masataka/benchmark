@@ -24,6 +24,7 @@ import io.openmessaging.benchmark.driver.ConsumerCallback;
 import java.io.File;
 import java.io.IOException;
 import java.io.StringReader;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -31,6 +32,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import org.apache.bookkeeper.stats.StatsLogger;
 import org.apache.kafka.clients.admin.AdminClient;
@@ -38,10 +40,13 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class KafkaBenchmarkDriver implements BenchmarkDriver {
 
@@ -139,6 +144,28 @@ public class KafkaBenchmarkDriver implements BenchmarkDriver {
         KafkaConsumer<String, byte[]> consumer = new KafkaConsumer<>(properties);
         try {
             consumer.subscribe(Arrays.asList(topic));
+            long timeoutMillis = 30000; // 30 seconds
+            long start = System.currentTimeMillis();
+            long end = start + timeoutMillis;
+            Set<String> subscribedTopics = consumer.subscription();
+            while (System.currentTimeMillis() < end) {
+                try {
+                    Map<String, List<PartitionInfo>> existingTopics =
+                            consumer.listTopics(Duration.ofSeconds(3));
+                    Set<String> existingTopicNames = existingTopics.keySet();
+
+                    if (existingTopicNames.containsAll(subscribedTopics)) {
+                        log.info("All subscribed topics are available: {}", subscribedTopics);
+                        break;
+                    } else {
+                        log.info("Waiting: {}, {}", subscribedTopics, existingTopicNames);
+                    }
+                } catch (Exception e) {
+                    log.error("Failed to list topics: {}", e.getMessage());
+                }
+
+                Thread.sleep(1000); // 1秒待機してリトライ
+            }
             return CompletableFuture.completedFuture(
                     new KafkaBenchmarkConsumer(consumer, consumerProperties, consumerCallback));
         } catch (Throwable t) {
@@ -168,4 +195,5 @@ public class KafkaBenchmarkDriver implements BenchmarkDriver {
     private static final ObjectMapper mapper =
             new ObjectMapper(new YAMLFactory())
                     .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+    private static final Logger log = LoggerFactory.getLogger(KafkaBenchmarkConsumer.class);
 }
