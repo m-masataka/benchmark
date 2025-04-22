@@ -143,11 +143,10 @@ public class KafkaBenchmarkDriver implements BenchmarkDriver {
         properties.put(ConsumerConfig.GROUP_ID_CONFIG, subscriptionName);
         KafkaConsumer<String, byte[]> consumer = new KafkaConsumer<>(properties);
         try {
-            consumer.subscribe(Arrays.asList(topic));
             long timeoutMillis = 30000; // 30 seconds
             long start = System.currentTimeMillis();
             long end = start + timeoutMillis;
-            Set<String> subscribedTopics = consumer.subscription();
+            List<String> subscribedTopics = Arrays.asList(topic);
             while (System.currentTimeMillis() < end) {
                 try {
                     Map<String, List<PartitionInfo>> existingTopics =
@@ -166,6 +165,7 @@ public class KafkaBenchmarkDriver implements BenchmarkDriver {
 
                 Thread.sleep(1000); // 1秒待機してリトライ
             }
+            consumer.subscribe(Arrays.asList(topic));
             return CompletableFuture.completedFuture(
                     new KafkaBenchmarkConsumer(consumer, consumerProperties, consumerCallback));
         } catch (Throwable t) {
